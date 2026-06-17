@@ -1,0 +1,48 @@
+# =============================================================================
+# LawyerGPT — Local multi-container stack (backend + frontend)
+# -----------------------------------------------------------------------------
+# Run from repo root:
+#   docker compose -f OPS/docker/docker-compose.yml up -d --build
+#
+# Stop:
+#   docker compose -f OPS/docker/docker-compose.yml down
+#
+# Logs:
+#   docker compose -f OPS/docker/docker-compose.yml logs -f
+# =============================================================================
+
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: OPS/docker/Dockerfile.backend
+    image: lawyergpt-backend:latest
+    container_name: lawyergpt-backend
+    env_file:
+      - ../../lawyergpt-server/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/data/chroma_db
+      - uploads_data:/data/uploads
+      - sqlite_data:/data/sqlite
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: OPS/docker/Dockerfile.frontend
+      args:
+        VITE_API_URL: http://localhost:8000
+    image: lawyergpt-frontend:latest
+    container_name: lawyergpt-frontend
+    ports:
+      - "3000:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+  uploads_data:
+  sqlite_data:

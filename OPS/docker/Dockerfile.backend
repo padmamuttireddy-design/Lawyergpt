@@ -1,0 +1,135 @@
+# =============================================================================
+# LawyerGPT — Backend  (FastAPI + LangChain Engine)
+# -----------------------------------------------------------------------------
+# Multi-stage build:
+#   builder  → installs all Python deps via UV (includes editable engine install)
+#   runtime  → slim Python image; only runtime libs, no build tools
+#
+# The engine (lawyergpt-engine) is referenced as an editable path dependency
+# from lawyergpt-server/pyproject.toml:
+#   [tool.uv.sources]
+#   lawyergpt-engine = { path = "../lawyergpt-engine", editable = true }
+#
+# In Docker, both repos are copied side-by-side under /app so that
+# ../lawyergpt-engine resolves correctly at install time and runtime.
+#
+# Build (from repo root):
+#   docker build \
+#     -f OPS/docker/Dockerfile.backend \
+#     -t lawyergpt-backend:latest \
+#     .
+#
+# Run:
+#   docker run \
+#     -p 8000:8000 \
+#     -e OPENAI_API_KEY=sk-... \
+#     -v lawyergpt-chroma:/data/chroma_db \
+#     -v lawyergpt-uploads:/data/uploads \
+#     -v lawyergpt-sqlite:/data/sqlite \
+#     lawyergpt-backend:latest
+# =============================================================================
+
+# ─── Stage 1: Dependency installation ────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+# System build deps required by some Python packages (chromadb, unstructured)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl             \
+        git              \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install UV from its official image — pinned tag for reproducible builds
+COPY --from=ghcr.io/astral-sh/uv:0.5.1 /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# ── Copy engine source ────────────────────────────────────────────────────────
+# Engine is copied first so its layer is reused when only server source changes.
+COPY lawyergpt-engine/ ./lawyergpt-engine/
+
+# ── Copy server manifests only (before source) ───────────────────────────────
+# This layer is only invalidated when pyproject.toml or uv.lock changes,
+# not when application source files change — keeps dep-install layer cached.
+COPY lawyergpt-server/pyproject.toml lawyergpt-server/uv.lock ./lawyergpt-server/
+
+WORKDIR /app/lawyergpt-server
+
+# Install all production dependencies.
+# --frozen:  use exact versions from uv.lock (no upgrades)
+# --no-dev:  exclude dev/test extras
+# The editable engine at ../lawyergpt-engine is resolved to /app/lawyergpt-engine
+RUN uv sync --frozen --no-dev
+
+# ── Copy remaining server source ──────────────────────────────────────────────
+# Done after dep install so source changes don't bust the dep cache.
+COPY lawyergpt-server/ ./
+
+# ─── Stage 2: Production runtime ─────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+LABEL org.opencontainers.image.title="LawyerGPT Backend"
+LABEL org.opencontainers.image.description="FastAPI + LangChain RAG backend with ChromaDB"
+LABEL org.opencontainers.image.version="0.1.0"
+
+# Runtime system libraries only (no compilers):
+#   libgomp1     → OpenMP, required by chromadb / numpy
+#   curl         → used by HEALTHCHECK
+#   ca-certificates → TLS verification for OpenAI API (replaces Windows truststore)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1        \
+        curl            \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Security: non-root user ───────────────────────────────────────────────────
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser  --system --uid 1001 \
+             --no-create-home --ingroup appgroup appuser
+
+# ── Copy installed environment from builder ───────────────────────────────────
+# We copy the full /app tree (server + engine + venv) so that the editable
+# engine path reference inside the venv (.pth file → /app/lawyergpt-engine)
+# stays valid in the runtime image.
+COPY --from=builder --chown=appuser:appgroup /app /app
+
+# ── Persistent data directories ───────────────────────────────────────────────
+# Mount these as named volumes in production to persist state across restarts:
+#   /data/chroma_db  → ChromaDB vector store
+#   /data/uploads    → uploaded PDF documents
+#   /data/sqlite     → SQLite database file
+RUN mkdir -p /data/chroma_db /data/uploads /data/sqlite && \
+    chown -R appuser:appgroup /data
+
+USER appuser
+
+# ── Environment ───────────────────────────────────────────────────────────────
+# Prepend venv bin so `python` and `uvicorn` resolve from the venv
+ENV PATH="/app/lawyergpt-server/.venv/bin:$PATH"
+
+# Disable .pyc files and enable unbuffered stdout/stderr (clean container logs)
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Point ChromaDB and uploads at the mounted volume paths.
+# These can be overridden at runtime via -e flags or a .env mount.
+ENV CHROMA_PERSIST_DIR=/data/chroma_db
+ENV UPLOAD_DIR=/data/uploads
+ENV DATABASE_URL=sqlite+aiosqlite:////data/sqlite/lawyergpt.db
+
+WORKDIR /app/lawyergpt-server
+
+EXPOSE 8000
+
+# Probe the /api/health endpoint; allow 30 s for startup (DB init + ChromaDB load)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health || exit 1
+
+# Graceful shutdown: uvicorn handles SIGTERM and drains in-flight requests.
+# --workers 1: single process per container (scale horizontally via replicas).
+# --no-access-log: access logging handled by the ingress/proxy layer in prod.
+CMD ["python", "-m", "uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000",     \
+     "--workers", "1",     \
+     "--no-access-log"]

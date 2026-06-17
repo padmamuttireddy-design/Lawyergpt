@@ -1,0 +1,54 @@
+# =============================================================================
+# .dockerignore — LawyerGPT
+# Excludes files that must not enter the Docker build context.
+# Keeps builds fast and prevents secrets from leaking into images.
+# =============================================================================
+
+# ── Version control ───────────────────────────────────────────────────────────
+**/.git
+**/.gitignore
+**/.gitattributes
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+lawyergpt-client/node_modules
+lawyergpt-client/dist
+lawyergpt-client/.vite
+lawyergpt-client/coverage
+
+# ── Python ───────────────────────────────────────────────────────────────────
+lawyergpt-server/.venv
+lawyergpt-engine/.venv
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# ── Persistent data (mounted as volumes at runtime) ───────────────────────────
+lawyergpt-engine/chroma_db
+lawyergpt-server/lawyergpt.db
+lawyergpt-server/uploads
+
+# ── Secrets — never bake .env files into images ───────────────────────────────
+**/.env
+**/.env.local
+**/.env.production
+# Allow .env.example (contains no secrets)
+!**/.env.example
+
+# ── Tests and dev tooling ─────────────────────────────────────────────────────
+**/test_*.py
+**/tests/
+lawyergpt-client/playwright-report
+lawyergpt-client/test-results
+
+# ── IDE and OS artefacts ──────────────────────────────────────────────────────
+**/.vscode
+**/.idea
+**/*.iml
+**/.DS_Store
+**/Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+**/*.log

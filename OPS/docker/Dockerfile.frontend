@@ -1,0 +1,88 @@
+# =============================================================================
+# LawyerGPT — Frontend  (React 18 + TypeScript + Vite)
+# -----------------------------------------------------------------------------
+# Multi-stage build:
+#   deps     → installs npm packages (cached layer)
+#   builder  → compiles TypeScript + produces Vite static bundle
+#   runtime  → minimal nginx:alpine serves the bundle (no Node in prod image)
+#
+# Build (from repo root):
+#   docker build \
+#     -f OPS/docker/Dockerfile.frontend \
+#     --build-arg VITE_API_URL=https://api.yourdomain.com \
+#     -t lawyergpt-frontend:latest \
+#     .
+#
+# Run:
+#   docker run -p 3000:8080 lawyergpt-frontend:latest
+# =============================================================================
+
+# ─── Stage 1: Install npm dependencies ───────────────────────────────────────
+FROM node:20-alpine AS deps
+
+WORKDIR /build
+
+# Copy manifests only — this layer is cache-busted only when deps change,
+# not when application source changes.
+COPY lawyergpt-client/package.json lawyergpt-client/package-lock.json* ./
+
+# ci: install exact versions from lock file; never upgrades; fails on mismatch
+RUN npm ci --frozen-lockfile
+
+# ─── Stage 2: Compile and bundle ─────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /build
+
+# Bring in installed packages from deps stage
+COPY --from=deps /build/node_modules ./node_modules
+
+# Copy full client source
+COPY lawyergpt-client/ .
+
+# VITE_API_URL is baked into the bundle at build time.
+# Override with --build-arg VITE_API_URL=https://api.example.com
+ARG  VITE_API_URL=http://localhost:8000
+ENV  VITE_API_URL=$VITE_API_URL
+ENV  NODE_ENV=production
+
+# tsc: type-check; vite build: tree-shake + minify → outputs to dist/
+RUN npm run build
+
+# ─── Stage 3: Production runtime (nginx) ─────────────────────────────────────
+FROM nginx:1.27-alpine AS runtime
+
+LABEL org.opencontainers.image.title="LawyerGPT Frontend"
+LABEL org.opencontainers.image.description="React/Vite SPA served via nginx"
+LABEL org.opencontainers.image.version="0.1.0"
+
+# Remove the default nginx site; replace with our hardened SPA config
+RUN rm /etc/nginx/conf.d/default.conf
+COPY OPS/docker/nginx.conf /etc/nginx/conf.d/app.conf
+
+# Copy compiled static bundle from builder
+COPY --from=builder /build/dist /usr/share/nginx/html
+
+# ── Security: drop to non-root ───────────────────────────────────────────────
+# nginx master process must bind the port; since we use port 8080 (unprivileged)
+# in nginx.conf we can run fully as a non-root user.
+RUN addgroup -g 1001 -S appgroup && \
+    adduser  -u 1001 -S appuser -G appgroup && \
+    # Directories nginx writes to at runtime
+    chown -R appuser:appgroup /usr/share/nginx/html  && \
+    chown -R appuser:appgroup /var/cache/nginx        && \
+    chown -R appuser:appgroup /var/log/nginx          && \
+    chown -R appuser:appgroup /etc/nginx/conf.d       && \
+    touch /var/run/nginx.pid && \
+    chown appuser:appgroup /var/run/nginx.pid
+
+USER appuser
+
+# Port 8080 — unprivileged; map to host port of your choice (e.g. -p 3000:8080)
+EXPOSE 8080
+
+# Lightweight health probe using busybox wget (already in alpine)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:8080/health || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

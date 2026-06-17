@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); $env:NODE_OPTIONS = \"--use-system-ca\"; Set-Location \"c:\\\\Users\\\\vidip\\\\OneDrive\\\\Desktop\\\\ProjectsLive\\\\LawyerGPT\\\\lawyergpt-client\"; npx playwright test 2>&1)",
+      "PowerShell(cd \"C:\\\\ProjectsLive\\\\LawyerGPT\\\\lawyergpt-server\"; Start-Job -ScriptBlock { Set-Location \"C:\\\\ProjectsLive\\\\LawyerGPT\\\\lawyergpt-server\"; .\\\\.venv\\\\Scripts\\\\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000 } | Out-Null; Start-Sleep -Seconds 5; Invoke-RestMethod \"http://localhost:8000/api/health\" -Method GET 2>&1)",
+      "PowerShell($port8000 = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if \\($port8000\\) { Write-Host \"Killing PID\\(s\\): $port8000\"; $port8000 | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } } else { Write-Host \"No process on port 8000\" })",
+      "PowerShell(\\(Get-Process -Id 2236\\).Path)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue)",
+      "PowerShell(Invoke-RestMethod \"http://localhost:8000/api/health\" -Method GET 2>&1)",
+      "PowerShell($port8000 = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if \\($port8000\\) { $port8000 | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; Start-Job -ScriptBlock { Set-Location \"C:\\\\ProjectsLive\\\\LawyerGPT\\\\lawyergpt-server\"; .\\\\.venv\\\\Scripts\\\\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 } | Out-Null; Start-Sleep -Seconds 6; Invoke-RestMethod \"http://localhost:8000/api/health\" -Method GET)",
+      "PowerShell($port8000 = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if \\($port8000\\) { $port8000 | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; $pinfo = New-Object System.Diagnostics.ProcessStartInfo; $pinfo.FileName = \"C:\\\\ProjectsLive\\\\LawyerGPT\\\\lawyergpt-server\\\\.venv\\\\Scripts\\\\python.exe\"; $pinfo.Arguments = \"-m uvicorn app.main:app --host 0.0.0.0 --port 8000\"; $pinfo.WorkingDirectory = \"C:\\\\ProjectsLive\\\\LawyerGPT\\\\lawyergpt-server\"; $pinfo.UseShellExecute = $false; $pinfo.RedirectStandardOutput = $true; $pinfo.RedirectStandardError = $true; $proc = [System.Diagnostics.Process]::Start\\($pinfo\\); Write-Host \"PID:\" $proc.Id; Start-Sleep -Seconds 5; Invoke-RestMethod \"http://localhost:8000/api/health\" -Method GET)",
+      "PowerShell(Invoke-RestMethod \"http://localhost:8000/api/health\" 2>&1)",
+      "PowerShell(Invoke-RestMethod \"http://localhost:8000/api/conversations\" 2>&1)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000, 8000 -ErrorAction SilentlyContinue)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short)"
+    ]
+  }
+}
