@@ -1,0 +1,50 @@
+# ── Node / Frontend ──────────────────────────────────────────────
+node_modules/
+dist/
+.next/
+.nuxt/
+*.tsbuildinfo
+
+# ── Python / Backend ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.pyo
+
+# ── UV ───────────────────────────────────────────────────────────
+.uv/
+
+# ── Databases & Vector Store ─────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+chroma_db/
+
+# ── Uploads ──────────────────────────────────────────────────────
+uploads/
+
+# ── Environment files ────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+# Allow examples
+!.env.example
+
+# ── Logs ─────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Playwright ───────────────────────────────────────────────────
+playwright-report/
+test-results/
+
+# ── OS ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDEs ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
