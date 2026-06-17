@@ -43,6 +43,8 @@ jobs:
 
       - name: Run backend test suite
         working-directory: lawyergpt-server
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run pytest tests/ -v --tb=short
 
   frontend-tests:
