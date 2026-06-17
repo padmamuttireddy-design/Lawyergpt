@@ -47,6 +47,27 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run pytest tests/ -v --tb=short
 
+      - name: Package backend build artifact
+        run: |
+          zip -r backend-build.zip \
+            lawyergpt-server/ \
+            lawyergpt-engine/ \
+            --exclude "*/.*" \
+            --exclude "*/__pycache__/*" \
+            --exclude "*/*.pyc" \
+            --exclude "*/\*.egg-info/*" \
+            --exclude "lawyergpt-server/.venv/*" \
+            --exclude "lawyergpt-server/lawyergpt.db" \
+            --exclude "lawyergpt-server/uploads/*" \
+            --exclude "lawyergpt-engine/chroma_db/*"
+
+      - name: Upload backend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: backend-build.zip
+          retention-days: 7
+
   frontend-tests:
     name: Frontend Tests (React + Playwright)
     runs-on: ubuntu-latest
